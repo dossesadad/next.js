@@ -10077,6 +10077,7 @@ dependencies = [
  "smallvec",
  "tokio",
  "turbo-tasks",
+ "turbo-tasks-backend",
 ]
 
 [[package]]
