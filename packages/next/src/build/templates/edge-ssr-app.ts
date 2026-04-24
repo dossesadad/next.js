@@ -159,6 +159,8 @@ async function requestHandler(
         typeof nextConfig.logging === 'object' &&
         Boolean(nextConfig.logging.serverFunctions),
       cacheComponents: Boolean(nextConfig.cacheComponents),
+      defaultValidationLevel:
+        nextConfig.experimental.instant.defaultValidationLevel,
       experimental: {
         isRoutePPREnabled: false,
         expireTime: nextConfig.expireTime,

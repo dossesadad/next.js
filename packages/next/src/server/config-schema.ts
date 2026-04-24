@@ -391,6 +391,13 @@ export const experimentalSchema = {
   allowDevelopmentBuild: z.literal(true).optional(),
 
   reactDebugChannel: z.boolean().optional(),
+  instant: z
+    .object({
+      defaultValidationLevel: z
+        .enum(['disabled', 'warning', 'error'])
+        .optional(),
+    })
+    .optional(),
   staticGenerationRetryCount: z.number().int().optional(),
   staticGenerationMaxConcurrency: z.number().int().optional(),
   staticGenerationMinPagesPerWorker: z.number().int().optional(),

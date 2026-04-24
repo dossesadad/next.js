@@ -866,6 +866,9 @@ export async function buildAppStaticPaths({
       staticPageGenerationTimeout,
       supportsDynamicResponse: true,
       cacheComponents,
+      // generateStaticParams evaluation doesn't render pages, so instant
+      // validation never runs here. The level value is irrelevant.
+      defaultValidationLevel: 'disabled',
       experimental: {
         authInterrupts,
         useCacheTimeout,

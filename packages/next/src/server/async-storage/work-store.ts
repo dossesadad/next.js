@@ -27,6 +27,7 @@ export type WorkStoreContext = {
     incrementalCache?: IncrementalCache
     isOnDemandRevalidate?: boolean
     cacheComponents: boolean
+    defaultValidationLevel: import('../config-shared').DefaultValidationLevel
     fetchCache?: AppSegmentConfig['fetchCache']
     isPossibleServerAction?: boolean
     pendingWaitUntil?: Promise<any>
@@ -138,6 +139,7 @@ export function createWorkStore({
 
     afterContext: createAfterContext(renderOpts),
     cacheComponentsEnabled: renderOpts.cacheComponents,
+    defaultValidationLevel: renderOpts.defaultValidationLevel,
     previouslyRevalidatedTags,
     refreshTagsByCacheKind: createRefreshTagsByCacheKind(),
     runInCleanSnapshot: createSnapshot(),

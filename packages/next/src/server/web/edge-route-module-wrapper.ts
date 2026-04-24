@@ -124,6 +124,9 @@ export class EdgeRouteModuleWrapper {
         onClose: closeController.onClose.bind(closeController),
         onAfterTaskError: undefined,
         cacheComponents: !!process.env.__NEXT_CACHE_COMPONENTS,
+        // Edge runtime doesn't run instant validation; the level value is
+        // irrelevant here.
+        defaultValidationLevel: 'disabled',
         experimental: {
           authInterrupts: !!process.env.__NEXT_EXPERIMENTAL_AUTH_INTERRUPTS,
           // Edge runtime doesn't support Cache Components, so this value is

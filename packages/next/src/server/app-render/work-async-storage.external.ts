@@ -111,6 +111,7 @@ export interface WorkStore {
   readonly nonce?: string
 
   cacheComponentsEnabled: boolean
+  defaultValidationLevel: import('../config-shared').DefaultValidationLevel
 
   /**
    * Run the given function inside a clean AsyncLocalStorage snapshot. This is

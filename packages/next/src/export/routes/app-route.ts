@@ -76,6 +76,9 @@ export async function exportAppRoute(
     },
     renderOpts: {
       cacheComponents,
+      // app-route handlers don't run instant validation, so the level
+      // value is irrelevant here.
+      defaultValidationLevel: 'disabled',
       experimental,
       isBuildTimePrerendering: true,
       supportsDynamicResponse: false,

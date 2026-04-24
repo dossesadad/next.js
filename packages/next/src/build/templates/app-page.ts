@@ -878,6 +878,8 @@ export async function handler(
               }
             : {}),
           cacheComponents: Boolean(nextConfig.cacheComponents),
+          defaultValidationLevel:
+            nextConfig.experimental.instant.defaultValidationLevel,
           experimental: {
             isRoutePPREnabled,
             expireTime: nextConfig.expireTime,

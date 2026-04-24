@@ -1,6 +1,15 @@
 import { getLayoutOrPageModule } from '../../lib/app-dir-module'
 import type { LoaderTree } from '../../lib/app-dir-module'
 import { parseLoaderTree } from '../../../shared/lib/router/utils/parse-loader-tree'
+import {
+  PAGE_SEGMENT_KEY,
+  DEFAULT_SEGMENT_KEY,
+} from '../../../shared/lib/segment'
+import {
+  UNDERSCORE_GLOBAL_ERROR_ROUTE,
+  UNDERSCORE_NOT_FOUND_ROUTE,
+} from '../../../shared/lib/entry-constants'
+import type { Segment } from '../../../shared/lib/app-router-types'
 import type {
   AppSegmentConfig,
   InstantSample,
@@ -9,6 +18,37 @@ import {
   workAsyncStorage,
   type WorkStore,
 } from '../work-async-storage.external'
+import { InvariantError } from '../../../shared/lib/invariant-error'
+
+/**
+ * True when an unconfigured segment should be treated as implicitly
+ * validated under a non-disabled default validation level. Only page and
+ * default segments qualify — layouts do not validate on their own.
+ */
+export function isImplicitValidationSegment(segment: Segment): boolean {
+  const key = typeof segment === 'string' ? segment : segment[0]
+  return (
+    key === PAGE_SEGMENT_KEY ||
+    key.startsWith(PAGE_SEGMENT_KEY) ||
+    key === DEFAULT_SEGMENT_KEY
+  )
+}
+
+/**
+ * Routes for the framework-synthesized error and not-found entries. They
+ * have no user-configurable escape hatch (the framework supplies the page
+ * when the user hasn't), so they're excluded from implicit validation under
+ * a non-disabled default validation level. Even when the user provides their
+ * own `global-error` or root `not-found`, these pages are special-purpose
+ * error UI — opting them into validation is something the user can do
+ * explicitly via `unstable_instant`.
+ */
+export function isFrameworkErrorRoute(route: string | undefined): boolean {
+  return (
+    route === UNDERSCORE_GLOBAL_ERROR_ROUTE ||
+    route === UNDERSCORE_NOT_FOUND_ROUTE
+  )
+}
 
 export async function anySegmentHasRuntimePrefetchEnabled(
   tree: LoaderTree
@@ -68,40 +108,98 @@ export async function isPageAllowedToBlock(tree: LoaderTree): Promise<boolean> {
   return false
 }
 
-type FoundSegmentWithConfig = {
-  path: string[]
-  config: NonNullable<AppSegmentConfig['unstable_instant']>
-}
-
 /**
- * Checks if any segments in the loader tree have `instant` configs that need validating.
- * NOTE: Client navigations call this multiple times, so we cache it.
- * */
-// Shared helper (not exported, not cached — called by the cached wrappers)
+ * Walks the loader tree and checks if any segment has an `instant` config
+ * that needs validating for the given mode.
+ *
+ * - Explicit `unstable_instant` exports are checked against mode.
+ * - Page and default segments without an explicit config get implicit
+ *   validation when the default validation level applies to this mode.
+ * - `unstable_disableValidation` on any segment kills validation for
+ *   the whole tree.
+ */
 async function anySegmentNeedsInstantValidation(
   rootTree: LoaderTree,
   mode: 'dev' | 'build'
 ): Promise<boolean> {
-  const segments = await findSegmentsWithInstantConfig(rootTree)
+  const workStore = workAsyncStorage.getStore()
+  if (!workStore) {
+    throw new InvariantError(
+      'anySegmentNeedsInstantValidation must run inside a WorkStore'
+    )
+  }
+  const { defaultValidationLevel } = workStore
 
-  // Check if there's any non-false configs that need validation.
-  // (If there's only `false`, there's no need to run validation).
-  // If any segment has `unstable_disableValidation`, we skip validation for the whole tree.
+  // The effective level for configs that opt in without specifying one
+  // (`unstable_instant = true` or an object without `level`). When the
+  // default is disabled, an explicit opt-in still means something, so we
+  // fall back to `'warning'`.
+  const defaultEffectiveLevel: 'warning' | 'error' =
+    defaultValidationLevel === 'disabled' ? 'warning' : defaultValidationLevel
+  // True when the default level applies to this mode, meaning unconfigured
+  // page/default segments should be treated as implicitly validated.
+  // Framework-synthesized error routes are excluded — see isFrameworkErrorRoute.
+  const defaultLevelAppliesToMode =
+    defaultValidationLevel !== 'disabled' &&
+    (mode === 'dev' || defaultEffectiveLevel === 'error') &&
+    !isFrameworkErrorRoute(workStore.route)
+
   let needsValidation = false
-  for (const { config } of segments) {
-    if (config === true) {
-      needsValidation = true
-    } else if (typeof config === 'object') {
-      if (
-        config.unstable_disableValidation === true ||
-        (mode === 'dev' && config.unstable_disableDevValidation === true) ||
-        (mode === 'build' && config.unstable_disableBuildValidation === true)
-      ) {
-        return false
+  let disabled = false
+
+  async function visit(tree: LoaderTree): Promise<void> {
+    if (disabled) return
+
+    const { mod: layoutOrPageMod } = await getLayoutOrPageModule(tree)
+    const instantConfig = layoutOrPageMod
+      ? (layoutOrPageMod as AppSegmentConfig).unstable_instant
+      : undefined
+
+    if (instantConfig === false) {
+      // Explicit opt-out. Doesn't itself trigger validation.
+    } else if (instantConfig === true) {
+      // Explicit opt-in using the default level.
+      if (mode === 'dev' || defaultEffectiveLevel === 'error') {
+        needsValidation = true
       }
-      // do not short-circuit, some other segment might still have `unstable_disableValidation`
+    } else if (typeof instantConfig === 'object' && instantConfig !== null) {
+      if (
+        instantConfig.unstable_disableValidation === true ||
+        (mode === 'dev' &&
+          instantConfig.unstable_disableDevValidation === true) ||
+        (mode === 'build' &&
+          instantConfig.unstable_disableBuildValidation === true)
+      ) {
+        disabled = true
+        return
+      }
+
+      if (instantConfig.level !== undefined) {
+        if (mode === 'dev' || instantConfig.level === 'error') {
+          needsValidation = true
+        }
+      } else if (mode === 'dev' || defaultEffectiveLevel === 'error') {
+        needsValidation = true
+      }
+    } else if (
+      defaultLevelAppliesToMode &&
+      isImplicitValidationSegment(tree[0])
+    ) {
+      // No explicit config. Implicit validation applies to page/default
+      // segments when the default level is active for this mode.
       needsValidation = true
     }
+
+    const { parallelRoutes } = parseLoaderTree(tree)
+    for (const parallelRouteKey in parallelRoutes) {
+      await visit(parallelRoutes[parallelRouteKey])
+      if (disabled) return
+    }
+  }
+
+  await visit(rootTree)
+  if (disabled) {
+    return false
   }
   return needsValidation
 }
@@ -114,36 +212,6 @@ export const anySegmentNeedsInstantValidationInDev = cacheScopedToWorkStore(
 export const anySegmentNeedsInstantValidationInBuild = cacheScopedToWorkStore(
   async (rootTree: LoaderTree): Promise<boolean> =>
     anySegmentNeedsInstantValidation(rootTree, 'build')
-)
-
-export const findSegmentsWithInstantConfig = cacheScopedToWorkStore(
-  async (rootTree: LoaderTree): Promise<FoundSegmentWithConfig[]> => {
-    const results: FoundSegmentWithConfig[] = []
-
-    async function visit(tree: LoaderTree, path: string[]): Promise<void> {
-      const { mod: layoutOrPageMod } = await getLayoutOrPageModule(tree)
-
-      // TODO(restart-on-cache-miss): Does this work correctly for client page/layout modules?
-      const instantConfig = layoutOrPageMod
-        ? (layoutOrPageMod as AppSegmentConfig).unstable_instant
-        : undefined
-      if (instantConfig !== undefined) {
-        results.push({
-          path,
-          config: instantConfig,
-        })
-      }
-
-      const { parallelRoutes } = parseLoaderTree(tree)
-      for (const parallelRouteKey in parallelRoutes) {
-        const childTree = parallelRoutes[parallelRouteKey]
-        await visit(childTree, [...path, parallelRouteKey])
-      }
-    }
-
-    await visit(rootTree, [])
-    return results
-  }
 )
 
 export const resolveInstantConfigSamplesForPage = async (
@@ -195,8 +263,9 @@ function cacheScopedToWorkStore<TArg extends WeakKey, TRes>(
   return (arg: TArg): TRes => {
     const workStore = workAsyncStorage.getStore()
     if (!workStore) {
-      // No caching.
-      return func(arg)
+      throw new InvariantError(
+        `${func.name || 'cacheScopedToWorkStore callee'} must run inside a WorkStore`
+      )
     }
 
     let results = resultsPerWorkStore.get(workStore)

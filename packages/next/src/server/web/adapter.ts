@@ -308,6 +308,9 @@ export async function adapter(
                 // default.
                 staticPageGenerationTimeout: 0,
                 cacheComponents: false,
+                // Proxy doesn't run instant validation; the level value is
+                // irrelevant here.
+                defaultValidationLevel: 'disabled',
                 experimental: {
                   isRoutePPREnabled: false,
                   authInterrupts:

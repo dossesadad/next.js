@@ -6838,6 +6838,7 @@ async function validateInstantConfigInBuildWithSample(
     }),
 
     cacheComponentsEnabled: outerWorkStore.cacheComponentsEnabled,
+    defaultValidationLevel: outerWorkStore.defaultValidationLevel,
     previouslyRevalidatedTags: [],
     refreshTagsByCacheKind: new Map(),
     runInCleanSnapshot: outerWorkStore.runInCleanSnapshot,

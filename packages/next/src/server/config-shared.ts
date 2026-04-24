@@ -37,6 +37,8 @@ export type NextConfigComplete = Required<Omit<NextConfig, 'configFile'>> & {
     prefetchInlining?: PrefetchInliningConfig
     // Normalized by config.ts: defaulted to 90% of staticPageGenerationTimeout
     useCacheTimeout: number
+    // Normalized by config.ts `finalizeConfig`: defaulted to `'disabled'`
+    instant: { defaultValidationLevel: DefaultValidationLevel }
   }
   // The root directory of the distDir. In development mode, this is the parent directory of `distDir`
   // since development builds use `{distDir}/dev`. This is used to ensure that the bundler doesn't
@@ -985,6 +987,23 @@ export interface ExperimentalConfig {
   cacheComponents?: boolean
 
   /**
+   * Configuration for instant navigation validation.
+   */
+  instant?: {
+    /**
+     * Controls the default validation level for instant navigations.
+     *
+     * - `'disabled'`: No automatic validation. Segments must explicitly export
+     *   `unstable_instant` to be validated.
+     * - `'warning'`: Validate in development only. Pages without an explicit
+     *   `unstable_instant` export are implicitly validated at this level.
+     * - `'error'`: Validate in development and at build time. Build fails if
+     *   validation errors are found.
+     */
+    defaultValidationLevel?: 'disabled' | 'warning' | 'error'
+  }
+
+  /**
    * The number of times to retry static generation (per page) before giving up.
    */
   staticGenerationRetryCount?: number
@@ -1258,6 +1277,15 @@ export type ExportPathMap = {
  *
  * Read more: [Next.js Docs: `next.config.js`](https://nextjs.org/docs/app/api-reference/config/next-config-js)
  */
+
+/**
+ * The resolved instant validation level. Mirrors the user-facing
+ * `experimental.instant.defaultValidationLevel` enum, but always defined —
+ * `loadConfig`'s `finalizeConfig` step fills in the framework default when
+ * the user hasn't specified one.
+ */
+export type DefaultValidationLevel = 'disabled' | 'warning' | 'error'
+
 export interface NextConfig {
   allowedDevOrigins?: string[]
 
@@ -2045,6 +2073,7 @@ export interface NextConfigRuntime {
     | 'exposeTestingApiInProductionBuild'
     | 'supportsImmutableAssets'
     | 'useNodeStreams'
+    | 'instant'
   > & {
     // Pick on @internal fields generates invalid .d.ts files
     /** @internal */
@@ -2113,6 +2142,7 @@ export function getNextConfigRuntime(
     exposeTestingApiInProductionBuild: ex.exposeTestingApiInProductionBuild,
     supportsImmutableAssets: ex.supportsImmutableAssets,
     useNodeStreams: ex.useNodeStreams,
+    instant: ex.instant,
 
     trustHostHeader: ex.trustHostHeader,
     isExperimentalCompile: ex.isExperimentalCompile,

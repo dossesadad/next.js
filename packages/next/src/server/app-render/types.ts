@@ -96,6 +96,7 @@ export interface RenderOptsPartial {
   err?: Error | null
   basePath: string
   cacheComponents: boolean
+  defaultValidationLevel: import('../config-shared').DefaultValidationLevel
   trailingSlash: boolean
   images: ImageConfigComplete
   supportsDynamicResponse: boolean
