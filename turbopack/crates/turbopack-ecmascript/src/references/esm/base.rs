@@ -51,7 +51,7 @@ use crate::{
     utils::module_id_to_lit,
 };
 
-#[turbo_tasks::value]
+#[derive(PartialEq, Eq)]
 pub enum ReferencedAsset {
     Some(ResolvedVc<Box<dyn EcmascriptChunkPlaceable>>),
     External(RcStr, ExternalType),
@@ -200,7 +200,7 @@ impl ReferencedAsset {
                                     .await?;
 
                             if let Some(&initial) = initial
-                                && *referenced_asset == ReferencedAsset::Some(initial)
+                                && referenced_asset == ReferencedAsset::Some(initial)
                             {
                                 // `initial` reexports from `asset` reexports from
                                 // `referenced_asset` (which is `initial`)
@@ -276,34 +276,32 @@ impl ReferencedAsset {
     }
 }
 
-#[turbo_tasks::value_impl]
 impl ReferencedAsset {
-    #[turbo_tasks::function]
-    pub async fn from_resolve_result(resolve_result: Vc<ModuleResolveResult>) -> Result<Vc<Self>> {
+    pub async fn from_resolve_result(resolve_result: Vc<ModuleResolveResult>) -> Result<Self> {
         // TODO handle multiple keyed results
         let result = resolve_result.await?;
         if result.is_unresolvable_ref() {
-            return Ok(ReferencedAsset::Unresolvable.cell());
+            return Ok(ReferencedAsset::Unresolvable);
         }
         for (_, result) in result.primary.iter() {
             match result {
                 ModuleResolveResultItem::External {
                     name: request, ty, ..
                 } => {
-                    return Ok(ReferencedAsset::External(request.clone(), *ty).cell());
+                    return Ok(ReferencedAsset::External(request.clone(), *ty));
                 }
-                &ModuleResolveResultItem::Module(module) => {
+                ModuleResolveResultItem::Module(module) => {
                     if let Some(placeable) =
-                        ResolvedVc::try_downcast::<Box<dyn EcmascriptChunkPlaceable>>(module)
+                        ResolvedVc::try_downcast::<Box<dyn EcmascriptChunkPlaceable>>(*module)
                     {
-                        return Ok(ReferencedAsset::Some(placeable).cell());
+                        return Ok(ReferencedAsset::Some(placeable));
                     }
                 }
                 // TODO ignore should probably be handled differently
                 _ => {}
             }
         }
-        Ok(ReferencedAsset::None.cell())
+        Ok(ReferencedAsset::None)
     }
 }
 
@@ -400,7 +398,9 @@ impl EsmAssetReference {
             resolve_override,
         }
     }
-    pub(crate) fn get_referenced_asset(self: Vc<Self>) -> Vc<ReferencedAsset> {
+    pub(crate) fn get_referenced_asset(
+        self: Vc<Self>,
+    ) -> impl Future<Output = Result<ReferencedAsset>> {
         ReferencedAsset::from_resolve_result(self.resolve_reference())
     }
 }
@@ -564,7 +564,7 @@ impl EsmAssetReference {
             let import_externals = this.import_externals;
             let referenced_asset = self.get_referenced_asset().await?;
 
-            match &*referenced_asset {
+            match &referenced_asset {
                 ReferencedAsset::Unresolvable => {
                     // Insert code that throws immediately at time of import if a request is
                     // unresolvable
@@ -582,7 +582,7 @@ impl EsmAssetReference {
                 _ => {
                     let mut result = vec![];
 
-                    let merged_index = if let ReferencedAsset::Some(asset) = &*referenced_asset {
+                    let merged_index = if let ReferencedAsset::Some(asset) = &referenced_asset {
                         scope_hoisting_context.get_module_index(*asset)
                     } else {
                         None
@@ -629,7 +629,7 @@ impl EsmAssetReference {
                                     .map_or(DUMMY_SP, |(start, end)| {
                                         Span::new(BytePos(start), BytePos(end))
                                     });
-                                match &*referenced_asset {
+                                match &referenced_asset {
                                     ReferencedAsset::Unresolvable => {
                                         unreachable!();
                                     }
