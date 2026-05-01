@@ -1,4 +1,155 @@
----
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PvP Tier List</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0a0a0a;
+  color: white;
+}
+
+h1 {
+  text-align: center;
+  padding: 20px;
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+}
+
+.tier {
+  background: #111;
+  border: 1px solid #333;
+  margin: 15px 0;
+  padding: 15px;
+  border-radius: 10px;
+  min-height: 80px;
+}
+
+.tier h2 {
+  margin: 0 0 10px 0;
+  color: #ff4d4d;
+}
+
+.players {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.player {
+  background: #222;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  cursor: grab;
+}
+
+.player:active {
+  cursor: grabbing;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>PvP Tier List (Drag & Drop)</h1>
+
+<div class="container">
+
+  <div class="tier" ondrop="drop(event)" ondragover="allowDrop(event)">
+    <h2>HT1</h2>
+    <div class="players" id="HT1">
+      <div class="player" draggable="true" ondragstart="drag(event)">Dream</div>
+      <div class="player" draggable="true" ondragstart="drag(event)">Techno</div>
+    </div>
+  </div>
+
+  <div class="tier" ondrop="drop(event)" ondragover="allowDrop(event)">
+    <h2>HT2</h2>
+    <div class="players" id="HT2">
+      <div class="player" draggable="true" ondragstart="drag(event)">Player1</div>
+      <div class="player" draggable="true" ondragstart="drag(event)">Player2</div>
+    </div>
+  </div>
+
+  <div class="tier" ondrop="drop(event)" ondragover="allowDrop(event)">
+    <h2>HT3</h2>
+    <div class="players" id="HT3">
+      <div class="player" draggable="true" ondragstart="drag(event)">Player3</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let dragged = null;
+
+// load saved state
+window.onload = () => {
+  const data = localStorage.getItem("tiers");
+  if (data) {
+    document.getElementById("HT1").innerHTML = "";
+    document.getElementById("HT2").innerHTML = "";
+    document.getElementById("HT3").innerHTML = "";
+
+    const saved = JSON.parse(data);
+
+    for (let tier in saved) {
+      saved[tier].forEach(p => {
+        addPlayer(tier, p);
+      });
+    }
+  }
+};
+
+function addPlayer(tier, name) {
+  let div = document.createElement("div");
+  div.className = "player";
+  div.draggable = true;
+  div.innerText = name;
+  div.ondragstart = drag;
+  document.getElementById(tier).appendChild(div);
+}
+
+function drag(ev) {
+  dragged = ev.target;
+}
+
+function allowDrop(ev) {
+  ev.preventDefault();
+}
+
+function drop(ev) {
+  ev.preventDefault();
+  let container = ev.target.closest(".players");
+  container.appendChild(dragged);
+  save();
+}
+
+function save() {
+  let data = {
+    HT1: [],
+    HT2: [],
+    HT3: []
+  };
+
+  document.querySelectorAll("#HT1 .player").forEach(p => data.HT1.push(p.innerText));
+  document.querySelectorAll("#HT2 .player").forEach(p => data.HT2.push(p.innerText));
+  document.querySelectorAll("#HT3 .player").forEach(p => data.HT3.push(p.innerText));
+
+  localStorage.setItem("tiers", JSON.stringify(data));
+}
+</script>
+
+</body>
+</html>---
 title: Layouts and Pages
 description: Learn how to create your first pages and layouts, and link between them with the Link component.
 related:
